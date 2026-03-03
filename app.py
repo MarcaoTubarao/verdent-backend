@@ -1,25 +1,4 @@
-import threading
-import time
-
-from flask import Flask, jsonify
-
-app = Flask(__name__)
-
-# ==============================
-# MONITORAMENTO EM BACKGROUND
-# ==============================
-
-def monitorar():
-    while True:
-        print("Monitorando ativos...")
-        time.sleep(600)
-
-# ==============================
-# ROTAS
-# ==============================
-
-@app.route("/")
-def home(): pass
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
@@ -27,51 +6,76 @@ portfolio = []
 
 @app.route("/")
 def home():
-    return "Backend Verdent AI rodando!"
+    return jsonify({"status": "Backend Verdent AI rodando!"})
 
 @app.route("/portfolio", methods=["GET"])
 def get_portfolio():
+    total = sum(asset["price"] * asset["quantity"] for asset in portfolio)
+
     return jsonify({
-        "total_value": 10000,
+        "total_value": total,
         "assets": portfolio
     })
 
 @app.route("/assets", methods=["POST"])
 def add_asset():
-    data = request.json
+    try:
+        data = request.get_json()
 
-    if not data or "ticker" not in data:
-        return jsonify({"error": "Ticker obrigatório"}), 400
+        ticker = data.get("ticker")
+        quantity = int(data.get("quantity", 1))
 
-    asset = {
-        "ticker": data["ticker"],
-        "price": 100,
-        "quantity": 1
-    }
+        if not ticker:
+            return jsonify({"error": "Ticker obrigatório"}), 400
 
-    portfolio.append(asset)
+        asset = {
+            "ticker": ticker.upper(),
+            "price": 100.0,
+            "quantity": quantity
+        }
 
-    return jsonify({"message": "Ativo adicionado", "asset": asset})
+        portfolio.append(asset)
+
+        return jsonify({
+            "message": "Ativo adicionado com sucesso",
+            "asset": asset
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 @app.route("/assets/batch", methods=["POST"])
 def add_batch():
-    data = request.json
+    try:
+        data = request.get_json()
+        tickers = data.get("tickers", [])
 
-    if not data or "tickers" not in data:
-        return jsonify({"error": "Lista de tickers obrigatória"}), 400
+        added = []
 
-    added = []
+        for item in tickers:
+            if isinstance(item, dict):
+                ticker = item.get("ticker")
+                quantity = int(item.get("quantity", 1))
+            else:
+                ticker = item
+                quantity = 1
 
-    for ticker in data["tickers"]:
-        asset = {
-            "ticker": ticker.strip(),
-            "price": 100,
-            "quantity": 1
-        }
-        portfolio.append(asset)
-        added.append(asset)
+            asset = {
+                "ticker": ticker.upper(),
+                "price": 100.0,
+                "quantity": quantity
+            }
 
-    return jsonify({"message": "Ativos adicionados", "assets": added})
+            portfolio.append(asset)
+            added.append(asset)
+
+        return jsonify({
+            "message": "Ativos adicionados com sucesso",
+            "assets": added
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 @app.route("/allocation", methods=["GET"])
 def allocation():
@@ -83,45 +87,3 @@ def signals():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
-    return jsonify({
-        "status": "online",
-        "message": "Backend Verdent AI rodando 🚀"
-    })
-
-@app.route("/portfolio")
-def portfolio():
-    return jsonify({
-        "total_value": 10000,
-        "assets": []
-    })
-
-@app.route("/allocation")
-def allocation():
-    return jsonify({
-        "stocks": 50,
-        "crypto": 30,
-        "cash": 20
-    })
-
-@app.route("/signals")
-def signals():
-    return jsonify({
-        "signals": []
-    })
-
-@app.route("/assets")
-def assets():
-    return jsonify({
-        "assets": []
-    })
-
-# ==============================
-# EXECUÇÃO LOCAL
-# ==============================
-
-if __name__ == "__main__":
-    thread = threading.Thread(target=monitorar)
-    thread.daemon = True
-    thread.start()
-
-    app.run(host="0.0.0.0", port=5000)
