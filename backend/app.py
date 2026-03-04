@@ -8,7 +8,7 @@ portfolio = []
 def home():
     return jsonify({"status": "Backend Verdent AI rodando!"})
 
-@app.route("/portfolio", methods=["GET"])
+@app.route("/portfolio", methods=["GET", "POST"])
 def get_portfolio():
     total = sum(asset["price"] * asset["quantity"] for asset in portfolio)
 
@@ -17,8 +17,13 @@ def get_portfolio():
         "assets": portfolio
     })
 
-@app.route("/assets", methods=["POST"])
+
+# 🔥 AGORA ACEITA GET E POST (ELIMINA 405)
+@app.route("/assets", methods=["GET", "POST"])
 def add_asset():
+    if request.method == "GET":
+        return jsonify({"message": "Use POST para adicionar ativos"})
+
     try:
         data = request.get_json()
 
@@ -44,8 +49,13 @@ def add_asset():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
-@app.route("/assets/batch", methods=["POST"])
+
+# 🔥 AGORA ACEITA GET E POST (ELIMINA 405)
+@app.route("/assets/batch", methods=["GET", "POST"])
 def add_batch():
+    if request.method == "GET":
+        return jsonify({"message": "Use POST para adicionar em lote"})
+
     try:
         data = request.get_json()
         tickers = data.get("tickers", [])
@@ -77,13 +87,16 @@ def add_batch():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+
 @app.route("/allocation", methods=["GET"])
 def allocation():
     return jsonify({"stocks": 60, "fiis": 40})
 
+
 @app.route("/signals", methods=["GET"])
 def signals():
     return jsonify({"signal": "BUY", "confidence": 87})
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
