@@ -1,206 +1,205 @@
 from flask import Flask, request, jsonify
 import yfinance as yf
-import pandas as pd
 
 app = Flask(__name__)
 
 portfolio = []
 
 # --------------------------------
+# LISTA DE AÇÕES DA B3
+# --------------------------------
+
+b3_tickers = [
+    "PETR4","VALE3","ITUB4","BBDC4","BBAS3",
+    "WEGE3","EGIE3","TAEE11","TRPL4","CPLE6",
+    "EQTL3","HYPE3","VIVT3","LREN3","MGLU3"
+]
+
+# --------------------------------
 # BUSCAR DADOS DO ATIVO
 # --------------------------------
-def get_stock_data(ticker):
+
+def get_stock(ticker):
 
     try:
-        ticker_b3 = ticker + ".SA"
-        stock = yf.Ticker(ticker_b3)
 
+        stock = yf.Ticker(ticker + ".SA")
         info = stock.info
 
+        roe = info.get("returnOnEquity")
+        dy = info.get("dividendYield")
+        pl = info.get("trailingPE")
+        pvp = info.get("priceToBook")
+
+        score = 0
+
+        if roe and roe > 0.15:
+            score += 2
+
+        if dy and dy > 0.06:
+            score += 2
+
+        if pl and pl < 12:
+            score += 1
+
+        if pvp and pvp < 2:
+            score += 1
+
+        if score >= 5:
+            rec = "BUY"
+        elif score >= 3:
+            rec = "HOLD"
+        else:
+            rec = "SELL"
+
         return {
-            "ticker": ticker.upper(),
-            "name": info.get("shortName"),
-            "sector": info.get("sector"),
+
+            "ticker": ticker,
             "price": info.get("currentPrice"),
-            "pl": info.get("trailingPE"),
-            "pvp": info.get("priceToBook"),
-            "roe": info.get("returnOnEquity"),
-            "dy": info.get("dividendYield"),
-            "marketcap": info.get("marketCap")
+            "roe": roe,
+            "pl": pl,
+            "pvp": pvp,
+            "dy": dy,
+            "sector": info.get("sector"),
+            "score": score,
+            "recommendation": rec
+
         }
 
     except:
+
         return None
 
 
 # --------------------------------
 # HOME
 # --------------------------------
+
 @app.route("/")
 def home():
-    return jsonify({"status": "Verdent AI Backend 2.0 rodando"})
+
+    return jsonify({
+        "status": "Verdent AI 3.0 online"
+    })
+
+
+# --------------------------------
+# SCANNER B3
+# --------------------------------
+
+@app.route("/scanner")
+def scanner():
+
+    result = []
+
+    for t in b3_tickers:
+
+        data = get_stock(t)
+
+        if data:
+            result.append(data)
+
+    result = sorted(
+        result,
+        key=lambda x: x["score"],
+        reverse=True
+    )
+
+    return jsonify(result)
 
 
 # --------------------------------
 # PORTFOLIO
 # --------------------------------
-@app.route("/portfolio", methods=["GET"])
+
+@app.route("/portfolio")
 def get_portfolio():
 
     total = 0
 
-    for asset in portfolio:
-        total += asset["price"] * asset["quantity"]
+    for a in portfolio:
+        total += a["price"] * a["quantity"]
 
     return jsonify({
+
         "total_value": total,
         "assets": portfolio
+
     })
 
 
 # --------------------------------
-# ADICIONAR ATIVO
+# ADD ASSET
 # --------------------------------
+
 @app.route("/assets", methods=["POST"])
 def add_asset():
 
     data = request.get_json()
 
     ticker = data.get("ticker")
-    quantity = int(data.get("quantity", 1))
+    quantity = int(data.get("quantity",1))
 
-    stock = get_stock_data(ticker)
+    stock = get_stock(ticker)
 
     if not stock:
-        return jsonify({"error": "Ticker inválido"}), 400
+        return jsonify({"error":"ticker inválido"}),400
 
     stock["quantity"] = quantity
 
     portfolio.append(stock)
 
     return jsonify({
-        "message": "Ativo adicionado",
-        "asset": stock
+        "asset":stock
     })
 
 
 # --------------------------------
-# RANKING DIVIDENDOS
+# IA RECOMENDAÇÃO
 # --------------------------------
-@app.route("/top-dividendos", methods=["GET"])
-def top_dividendos():
 
-    tickers = [
-        "PETR4","VALE3","BBAS3","ITUB4",
-        "TAEE11","TRPL4","EGIE3","CPLE6"
-    ]
-
-    stocks = []
-
-    for t in tickers:
-
-        data = get_stock_data(t)
-
-        if data:
-            stocks.append(data)
-
-    ranked = sorted(
-        stocks,
-        key=lambda x: x["dy"] if x["dy"] else 0,
-        reverse=True
-    )
-
-    return jsonify(ranked)
-
-
-# --------------------------------
-# RANKING ROE
-# --------------------------------
-@app.route("/top-roe", methods=["GET"])
-def top_roe():
-
-    tickers = [
-        "WEGE3","ITUB4","BBAS3","VALE3",
-        "PETR4","EQTL3","RAIL3"
-    ]
-
-    stocks = []
-
-    for t in tickers:
-
-        data = get_stock_data(t)
-
-        if data:
-            stocks.append(data)
-
-    ranked = sorted(
-        stocks,
-        key=lambda x: x["roe"] if x["roe"] else 0,
-        reverse=True
-    )
-
-    return jsonify(ranked)
-
-
-# --------------------------------
-# IA SIMPLES DE RECOMENDAÇÃO
-# --------------------------------
-@app.route("/ai-recommendation", methods=["GET"])
-def ai_recommendation():
-
-    tickers = [
-        "WEGE3","ITUB4","BBAS3",
-        "VALE3","PETR4","EGIE3"
-    ]
+@app.route("/ai")
+def ai():
 
     recommendations = []
 
-    for t in tickers:
+    for t in b3_tickers:
 
-        data = get_stock_data(t)
+        data = get_stock(t)
 
-        if not data:
-            continue
+        if data and data["recommendation"] == "BUY":
+            recommendations.append(data)
 
-        score = 0
-
-        if data["roe"] and data["roe"] > 0.15:
-            score += 2
-
-        if data["dy"] and data["dy"] > 0.06:
-            score += 2
-
-        if data["pl"] and data["pl"] < 10:
-            score += 1
-
-        data["score"] = score
-
-        recommendations.append(data)
-
-    ranked = sorted(
-        recommendations,
-        key=lambda x: x["score"],
-        reverse=True
-    )
-
-    return jsonify(ranked)
+    return jsonify(recommendations)
 
 
 # --------------------------------
 # ALOCAÇÃO
 # --------------------------------
+
 @app.route("/allocation")
 def allocation():
-    return jsonify({"stocks": 70, "fiis": 30})
+
+    stocks = len(portfolio)
+
+    return jsonify({
+        "stocks": stocks,
+        "fiis": 0
+    })
 
 
 # --------------------------------
 # SIGNALS
 # --------------------------------
+
 @app.route("/signals")
 def signals():
-    return jsonify({"signal": "BUY", "confidence": 87})
+
+    return jsonify({
+        "signal":"BUY",
+        "confidence":82
+    })
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
+    app.run(host="0.0.0.0",port=8080)
